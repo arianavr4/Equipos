@@ -3,10 +3,13 @@ import pandas as pd
 import sqlite3
 from datetime import date
 
+
+# ============================================================
 # CONFIGURACIÓN
+# ============================================================
 
 st.set_page_config(
-    page_title="Dashboard de monitoreo de equipos",
+    page_title="Equipment Monitoring Dashboard",
     page_icon="🧪",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -15,248 +18,55 @@ st.set_page_config(
 DB_NAME = "equipment_dashboard.db"
 
 
-# THEME
+# ============================================================
+# ESTILO VISUAL
+# ============================================================
+
 st.markdown("""
 <style>
 
-    /* COLORES PRINCIPALES */
-
-    :root {
-        --blue-dark: #003B5C;
-        --blue: #0072CE;
-        --blue-light: #EAF4FB;
-        --blue-soft: #F4F8FB;
-        --text-dark: #243746;
-        --text-gray: #64748B;
-        --border: #D9E2EA;
-        --white: #FFFFFF;
-    }
-
-
-    /* FONDO GENERAL */
-
+    /* Fondo general */
     .stApp {
         background-color: #F4F7FA;
     }
 
-
-    /* SIDEBAR */
-
+    /* Sidebar */
     [data-testid="stSidebar"] {
-        background: linear-gradient(
-            180deg,
-            #003B5C 0%,
-            #005B82 100%
-        );
+        background-color: #003B5C;
     }
 
     [data-testid="stSidebar"] * {
         color: white !important;
     }
 
-    [data-testid="stSidebar"] .stRadio label {
-        padding: 8px 4px;
-        border-radius: 6px;
+    /* Títulos */
+    h1, h2, h3 {
+        color: #003B5C !important;
     }
 
-
-    /*HEADER PRINCIPAL */
-
-    .main-header {
-        background: linear-gradient(
-            135deg,
-            #003B5C 0%,
-            #006DAA 100%
-        );
-
-        padding: 28px 35px;
-        border-radius: 14px;
-        margin-bottom: 25px;
-
-        box-shadow: 0 4px 12px rgba(0, 59, 92, 0.15);
-    }
-
-    .main-header h1 {
-        color: white;
-        font-size: 30px;
-        font-weight: 700;
-        margin: 0;
-        letter-spacing: 0.3px;
-    }
-
-    .main-header p {
-        color: #DCECF5;
-        font-size: 14px;
-        margin-top: 6px;
-        margin-bottom: 0;
-    }
-
-
-    /* TÍTULOS DE SECCIÓN */
-
-    .section-title {
-        color: #003B5C;
-        font-size: 21px;
-        font-weight: 700;
-        margin-top: 10px;
-        margin-bottom: 15px;
-    }
-
-
-    /* TARJETAS KPI */
-
-    .kpi-card {
+    /* Métricas */
+    [data-testid="stMetric"] {
         background-color: white;
         border: 1px solid #DCE5EC;
         border-radius: 12px;
-        padding: 20px 22px;
-        min-height: 125px;
-
-        box-shadow: 0 2px 8px rgba(0, 59, 92, 0.06);
+        padding: 15px;
+        box-shadow: 0px 2px 8px rgba(0, 59, 92, 0.07);
     }
 
-    .kpi-label {
-        color: #64748B;
-        font-size: 13px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+    [data-testid="stMetricLabel"] {
+        color: #64748B !important;
     }
 
-    .kpi-number {
-        color: #003B5C;
-        font-size: 32px;
-        font-weight: 750;
-        margin-top: 8px;
+    [data-testid="stMetricValue"] {
+        color: #003B5C !important;
     }
 
-    .kpi-description {
-        color: #64748B;
-        font-size: 12px;
-        margin-top: 3px;
-    }
-
-
-    /* ALERTAS */
-
-    .alert-box {
-        background-color: white;
-        border-radius: 10px;
-        padding: 16px 20px;
-        margin-bottom: 10px;
-
-        border-left: 5px solid #E53935;
-
-        box-shadow: 0 2px 7px rgba(0,0,0,0.05);
-    }
-
-    .alert-box.warning {
-        border-left: 5px solid #F4B400;
-    }
-
-    .alert-title {
-        color: #243746;
-        font-weight: 700;
-        font-size: 15px;
-    }
-
-    .alert-text {
-        color: #64748B;
-        font-size: 13px;
-        margin-top: 3px;
-    }
-
-
-    /*TARJETAS DE EQUIPOS */
-
-    .equipment-card {
-        background-color: white;
-        border: 1px solid #DCE5EC;
-        border-radius: 12px;
-        padding: 18px;
-
-        margin-bottom: 15px;
-
-        box-shadow: 0 2px 8px rgba(0, 59, 92, 0.05);
-
-        min-height: 175px;
-    }
-
-    .equipment-code {
-        color: #003B5C;
-        font-size: 19px;
-        font-weight: 750;
-    }
-
-    .equipment-type {
-        color: #64748B;
-        font-size: 12px;
-        margin-top: 2px;
-    }
-
-    .equipment-info {
-        color: #475569;
-        font-size: 13px;
-        margin-top: 12px;
-        line-height: 1.7;
-    }
-
-
-    /* BADGES DE ESTADO */
-
-    .status {
-        display: inline-block;
-        padding: 5px 10px;
-        border-radius: 20px;
-
-        font-size: 11px;
-        font-weight: 700;
-
-        margin-top: 10px;
-    }
-
-    .status-operativo {
-        background-color: #E7F6EC;
-        color: #187A3D;
-    }
-
-    .status-uso {
-        background-color: #E7F2FC;
-        color: #0067A5;
-    }
-
-    .status-mantenimiento {
-        background-color: #FFF4D6;
-        color: #986F00;
-    }
-
-    .status-fuera {
-        background-color: #FDECEC;
-        color: #B42318;
-    }
-
-    .status-baja {
-        background-color: #E9EDF1;
-        color: #52616B;
-    }
-
-
-    /* SEPARADORES */
-
-    hr {
-        border: none;
-        border-top: 1px solid #DCE5EC;
-        margin: 25px 0;
-    }
-
-
-    /*BOTONES */
-
+    /* Botones */
     .stButton > button {
-        border-radius: 7px;
-        border: none;
         background-color: #0072CE;
         color: white;
+        border: none;
+        border-radius: 7px;
         font-weight: 600;
     }
 
@@ -265,29 +75,26 @@ st.markdown("""
         color: white;
     }
 
-
-    /* DATAFRAMES / TABLAS */
-
-    [data-testid="stDataFrame"] {
-        border-radius: 10px;
-        overflow: hidden;
+    /* Contenedores */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: white;
+        border-radius: 12px;
+        border: 1px solid #DCE5EC;
     }
 
-
-    /* PIE */
-
-    .footer {
-        text-align: center;
-        color: #94A3B8;
-        font-size: 11px;
-        padding: 25px 0 10px 0;
+    /* Dataframe */
+    [data-testid="stDataFrame"] {
+        border-radius: 10px;
     }
 
 </style>
 """, unsafe_allow_html=True)
 
 
+# ============================================================
 # BASE DE DATOS
+# ============================================================
+
 def conectar_db():
     return sqlite3.connect(DB_NAME)
 
@@ -325,7 +132,11 @@ def crear_tablas():
 
 crear_tablas()
 
-# FUNCIONES DE BASE DE DATOS
+
+# ============================================================
+# FUNCIONES BASE DE DATOS
+# ============================================================
+
 def obtener_equipos():
 
     conn = conectar_db()
@@ -362,11 +173,17 @@ def registrar_uso(
 ):
 
     conn = conectar_db()
+
     cursor = conn.cursor()
 
     cursor.execute("""
         INSERT INTO usos
-        (codigo_equipo, fecha, tipo_registro, observacion)
+        (
+            codigo_equipo,
+            fecha,
+            tipo_registro,
+            observacion
+        )
         VALUES (?, ?, ?, ?)
     """, (
         codigo,
@@ -390,6 +207,7 @@ def agregar_equipo(
 ):
 
     conn = conectar_db()
+
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -408,11 +226,16 @@ def agregar_equipo(
     conn.commit()
     conn.close()
 
+
+# ============================================================
 # FUNCIONES DE CÁLCULO
+# ============================================================
+
 def calcular_ultimo_uso(codigo, usos):
 
     registros = usos[
-        (usos["codigo_equipo"] == codigo) &
+        (usos["codigo_equipo"] == codigo)
+        &
         (usos["tipo_registro"] == "Uso")
     ]
 
@@ -423,6 +246,9 @@ def calcular_ultimo_uso(codigo, usos):
         registros["fecha"],
         errors="coerce"
     )
+
+    if fechas.dropna().empty:
+        return None
 
     return fechas.max().date()
 
@@ -450,31 +276,10 @@ def determinar_alerta(dias):
     if dias <= 7:
         return "🟢 Uso reciente"
 
-    elif dias <= 14:
+    if dias <= 14:
         return "🟡 Revisar"
 
-    else:
-        return "🔴 Sin uso prolongado"
-
-
-def obtener_clase_estado(estado):
-
-    if estado == "Operativo":
-        return "status-operativo"
-
-    if estado == "En uso":
-        return "status-uso"
-
-    if estado == "En mantenimiento":
-        return "status-mantenimiento"
-
-    if estado == "Fuera de servicio":
-        return "status-fuera"
-
-    if estado == "De baja":
-        return "status-baja"
-
-    return "status-baja"
+    return "🔴 Sin uso prolongado"
 
 
 def obtener_icono_estado(estado):
@@ -496,53 +301,34 @@ def obtener_icono_estado(estado):
 
     return "⚪"
 
-# DATOS
+
+# ============================================================
+# CARGAR INFORMACIÓN
+# ============================================================
+
 equipos = obtener_equipos()
 usos = obtener_usos()
 
+
+# ============================================================
 # SIDEBAR
+# ============================================================
+
 with st.sidebar:
 
     st.markdown(
-        """
-        <div style="
-            text-align:center;
-            padding: 15px 5px 25px 5px;
-        ">
-            <div style="
-                font-size:35px;
-                margin-bottom:8px;
-            ">
-                🧪
-            </div>
-
-            <div style="
-                font-size:18px;
-                font-weight:700;
-            ">
-                EQUIPMENT
-            </div>
-
-            <div style="
-                font-size:18px;
-                font-weight:700;
-            ">
-                MONITORING
-            </div>
-
-            <div style="
-                font-size:11px;
-                opacity:0.75;
-                margin-top:5px;
-            ">
-                Equipment management
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
+        "# 🧪"
     )
 
-    st.markdown("---")
+    st.markdown(
+        "## MONITOREO DIGITAL DE EQUIPOS"
+    )
+
+    st.caption(
+        "Equipment management"
+    )
+
+    st.divider()
 
     pagina = st.radio(
         "NAVEGACIÓN",
@@ -554,34 +340,41 @@ with st.sidebar:
         ]
     )
 
-    st.markdown("---")
+    st.divider()
 
     st.caption(
         "Prototype v0.2"
     )
 
-# HEADER
-st.markdown(
-    """
-    <div class="main-header">
 
-        <h1>
-            Equipment Monitoring Dashboard
-        </h1>
+# ============================================================
+# ENCABEZADO
+# ============================================================
 
-        <p>
-            Monitoreo de estado, utilización y alertas de equipos
-        </p>
-
-    </div>
-    """,
-    unsafe_allow_html=True
+st.title(
+    "Monitoreo de equipos"
 )
 
+st.caption(
+    "Monitoreo de estado, utilización y alertas de equipos"
+)
+
+st.divider()
+
+
+# ============================================================
 # DASHBOARD
+# ============================================================
+
 if pagina == "Dashboard":
 
-    # CÁLCULO DE KPIs
+    st.subheader(
+        "📊 Resumen general"
+    )
+
+    # --------------------------------------------------------
+    # KPIs
+    # --------------------------------------------------------
 
     total = len(equipos)
 
@@ -615,139 +408,48 @@ if pagina == "Dashboard":
         if dias is not None and dias > 14:
             sin_uso += 1
 
-    # KPIs
-    st.markdown(
-        '<div class="section-title">Resumen general</div>',
-        unsafe_allow_html=True
-    )
 
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
-
-        st.markdown(
-            f"""
-            <div class="kpi-card">
-
-                <div class="kpi-label">
-                    Total equipos
-                </div>
-
-                <div class="kpi-number">
-                    {total}
-                </div>
-
-                <div class="kpi-description">
-                    Equipos registrados
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True
+        st.metric(
+            "TOTAL EQUIPOS",
+            total
         )
-
 
     with col2:
-
-        st.markdown(
-            f"""
-            <div class="kpi-card">
-
-                <div class="kpi-label">
-                    Operativos
-                </div>
-
-                <div class="kpi-number">
-                    {operativos}
-                </div>
-
-                <div class="kpi-description">
-                    Disponibles
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True
+        st.metric(
+            "OPERATIVOS",
+            operativos
         )
-
 
     with col3:
-
-        st.markdown(
-            f"""
-            <div class="kpi-card">
-
-                <div class="kpi-label">
-                    En uso
-                </div>
-
-                <div class="kpi-number">
-                    {en_uso}
-                </div>
-
-                <div class="kpi-description">
-                    Uso actual
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True
+        st.metric(
+            "EN USO",
+            en_uso
         )
-
 
     with col4:
-
-        st.markdown(
-            f"""
-            <div class="kpi-card">
-
-                <div class="kpi-label">
-                    Sin uso
-                </div>
-
-                <div class="kpi-number">
-                    {sin_uso}
-                </div>
-
-                <div class="kpi-description">
-                    Más de 14 días
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True
+        st.metric(
+            "SIN USO",
+            sin_uso
         )
-
 
     with col5:
-
-        st.markdown(
-            f"""
-            <div class="kpi-card">
-
-                <div class="kpi-label">
-                    De baja
-                </div>
-
-                <div class="kpi-number">
-                    {baja}
-                </div>
-
-                <div class="kpi-description">
-                    No disponibles
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True
+        st.metric(
+            "DE BAJA",
+            baja
         )
 
-    # ALERTAS
-    st.markdown("<br>", unsafe_allow_html=True)
 
-    st.markdown(
-        '<div class="section-title">⚠️ Alertas</div>',
-        unsafe_allow_html=True
+    # --------------------------------------------------------
+    # ALERTAS
+    # --------------------------------------------------------
+
+    st.divider()
+
+    st.subheader(
+        "⚠️ Alertas"
     )
 
     alertas = []
@@ -763,49 +465,40 @@ if pagina == "Dashboard":
 
         if dias is not None and dias > 14:
 
-            alertas.append({
-                "codigo": codigo,
-                "dias": dias
-            })
+            alertas.append(
+                (
+                    codigo,
+                    dias
+                )
+            )
 
 
     if alertas:
 
-        for alerta in alertas:
+        for codigo, dias in alertas:
 
-            st.markdown(
-                f"""
-                <div class="alert-box">
-
-                    <div class="alert-title">
-                        🔴 {alerta["codigo"]}
-                    </div>
-
-                    <div class="alert-text">
-                        El equipo lleva
-                        <b>{alerta["dias"]} días</b>
-                        sin registrar uso.
-                    </div>
-
-                </div>
-                """,
-                unsafe_allow_html=True
+            st.error(
+                f"🔴 {codigo} — "
+                f"{dias} días sin registrar uso."
             )
 
     else:
 
         st.success(
-            "No hay alertas de equipos sin uso prolongado."
+            "✓ No hay equipos con más de "
+            "14 días sin registrar uso."
         )
 
-    # ESTADO DE EQUIPOS
-    st.markdown("<br>", unsafe_allow_html=True)
 
-    st.markdown(
-        '<div class="section-title">Estado de equipos</div>',
-        unsafe_allow_html=True
+    # --------------------------------------------------------
+    # TABLA
+    # --------------------------------------------------------
+
+    st.divider()
+
+    st.subheader(
+        "🖥️ Estado de equipos"
     )
-
 
     if equipos.empty:
 
@@ -831,21 +524,37 @@ if pagina == "Dashboard":
                 usos
             )
 
+            if ultimo_uso:
+
+                ultimo_uso_texto = (
+                    ultimo_uso.strftime(
+                        "%d/%m/%Y"
+                    )
+                )
+
+            else:
+
+                ultimo_uso_texto = "Sin registro"
+
+
             datos_dashboard.append({
 
                 "Código": codigo,
 
                 "Tipo": equipo["tipo"],
 
-                "Estado": equipo["estado"],
-
-                "Ubicación": equipo["ubicacion"],
-
-                "Último uso": (
-                    ultimo_uso
-                    if ultimo_uso
-                    else "Sin registro"
+                "Estado": (
+                    f"{obtener_icono_estado(equipo['estado'])} "
+                    f"{equipo['estado']}"
                 ),
+
+                "Ubicación": (
+                    equipo["ubicacion"]
+                    if equipo["ubicacion"]
+                    else "-"
+                ),
+
+                "Último uso": ultimo_uso_texto,
 
                 "Días sin uso": (
                     dias
@@ -864,21 +573,22 @@ if pagina == "Dashboard":
             datos_dashboard
         )
 
-
         st.dataframe(
             df_dashboard,
             use_container_width=True,
             hide_index=True
         )
 
+
+# ============================================================
 # EQUIPOS
+# ============================================================
+
 elif pagina == "Equipos":
 
-    st.markdown(
-        '<div class="section-title">🖥️ Equipos registrados</div>',
-        unsafe_allow_html=True
+    st.subheader(
+        "🖥️ Equipos registrados"
     )
-
 
     if equipos.empty:
 
@@ -887,19 +597,24 @@ elif pagina == "Equipos":
         )
 
     else:
-        # FILTROS
-        col1, col2, col3 = st.columns(3)
 
+        # ----------------------------------------------------
+        # FILTROS
+        # ----------------------------------------------------
+
+        col1, col2, col3 = st.columns(3)
 
         with col1:
 
-            estados = [
-                "Todos"
-            ] + sorted(
-                equipos["estado"]
-                .dropna()
-                .unique()
-                .tolist()
+            estados = (
+                ["Todos"]
+                +
+                sorted(
+                    equipos["estado"]
+                    .dropna()
+                    .unique()
+                    .tolist()
+                )
             )
 
             filtro_estado = st.selectbox(
@@ -910,13 +625,15 @@ elif pagina == "Equipos":
 
         with col2:
 
-            tipos = [
-                "Todos"
-            ] + sorted(
-                equipos["tipo"]
-                .dropna()
-                .unique()
-                .tolist()
+            tipos = (
+                ["Todos"]
+                +
+                sorted(
+                    equipos["tipo"]
+                    .dropna()
+                    .unique()
+                    .tolist()
+                )
             )
 
             filtro_tipo = st.selectbox(
@@ -932,21 +649,23 @@ elif pagina == "Equipos":
                 placeholder="Ej. OPT-001"
             )
 
-        # APLICAR FILTROS
+
         filtrados = equipos.copy()
 
 
         if filtro_estado != "Todos":
 
             filtrados = filtrados[
-                filtrados["estado"] == filtro_estado
+                filtrados["estado"]
+                == filtro_estado
             ]
 
 
         if filtro_tipo != "Todos":
 
             filtrados = filtrados[
-                filtrados["tipo"] == filtro_tipo
+                filtrados["tipo"]
+                == filtro_tipo
             ]
 
 
@@ -962,9 +681,13 @@ elif pagina == "Equipos":
             ]
 
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.divider()
 
+
+        # ----------------------------------------------------
         # TARJETAS
+        # ----------------------------------------------------
+
         if filtrados.empty:
 
             st.warning(
@@ -973,17 +696,15 @@ elif pagina == "Equipos":
 
         else:
 
-            filas = [
-                filtrados.iloc[i:i+3]
-                for i in range(
-                    0,
-                    len(filtrados),
-                    3
-                )
-            ]
+            for inicio in range(
+                0,
+                len(filtrados),
+                3
+            ):
 
-
-            for fila in filas:
+                fila = filtrados.iloc[
+                    inicio:inicio + 3
+                ]
 
                 columnas = st.columns(3)
 
@@ -997,22 +718,18 @@ elif pagina == "Equipos":
 
                     estado = equipo["estado"]
 
-                    icono = obtener_icono_estado(
-                        estado
+                    ultimo_uso = (
+                        calcular_ultimo_uso(
+                            codigo,
+                            usos
+                        )
                     )
 
-                    clase = obtener_clase_estado(
-                        estado
-                    )
-
-                    ultimo_uso = calcular_ultimo_uso(
-                        codigo,
-                        usos
-                    )
-
-                    dias = calcular_dias_sin_uso(
-                        codigo,
-                        usos
+                    dias = (
+                        calcular_dias_sin_uso(
+                            codigo,
+                            usos
+                        )
                     )
 
 
@@ -1031,73 +748,68 @@ elif pagina == "Equipos":
                         )
 
 
-                    dias_texto = (
-                        str(dias)
-                        if dias is not None
-                        else "-"
-                    )
-
-
                     with columna:
 
-                        st.markdown(
-                            f"""
-                            <div class="equipment-card">
+                        with st.container(
+                            border=True
+                        ):
 
-                                <div class="equipment-code">
-                                    {codigo}
-                                </div>
+                            st.markdown(
+                                f"### {obtener_icono_estado(estado)} {codigo}"
+                            )
 
-                                <div class="equipment-type">
-                                    {equipo["tipo"]}
-                                </div>
+                            st.caption(
+                                equipo["tipo"]
+                            )
 
-                                <div>
-                                    <span class="
-                                        status
-                                        {clase}
-                                    ">
-                                        {icono} {estado}
-                                    </span>
-                                </div>
+                            st.write(
+                                f"**Estado:** {estado}"
+                            )
 
-                                <div class="equipment-info">
+                            st.write(
+                                f"**Último uso:** "
+                                f"{ultimo_uso_texto}"
+                            )
 
-                                    📅 Último uso:
-                                    <b>{ultimo_uso_texto}</b>
+                            if dias is not None:
 
-                                    <br>
+                                st.write(
+                                    f"**Días sin uso:** "
+                                    f"{dias}"
+                                )
 
-                                    ⏱️ Días sin uso:
-                                    <b>{dias_texto}</b>
+                            else:
 
-                                    <br>
+                                st.write(
+                                    "**Días sin uso:** "
+                                    "Sin registro"
+                                )
 
-                                    📍 Ubicación:
-                                    <b>
-                                        {equipo["ubicacion"]
-                                        if equipo["ubicacion"]
-                                        else "No registrada"}
-                                    </b>
+                            ubicacion = (
+                                equipo["ubicacion"]
+                                if equipo["ubicacion"]
+                                else "No registrada"
+                            )
 
-                                </div>
+                            st.write(
+                                f"**Ubicación:** "
+                                f"{ubicacion}"
+                            )
 
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
 
+# ============================================================
 # REGISTRAR USO
+# ============================================================
+
 elif pagina == "Registrar uso":
 
-    st.markdown(
-        '<div class="section-title">📝 Registrar uso</div>',
-        unsafe_allow_html=True
+    st.subheader(
+        "📝 Registrar uso"
     )
 
     st.info(
-        "El registro digital complementa el registro físico "
-        "del cuadernillo."
+        "El registro digital complementa el "
+        "registro físico del cuadernillo."
     )
 
 
@@ -1109,31 +821,24 @@ elif pagina == "Registrar uso":
 
     else:
 
-        lista_equipos = equipos[
-            "codigo"
-        ].tolist()
+        lista_equipos = (
+            equipos["codigo"].tolist()
+        )
 
 
-        with st.form("formulario_uso"):
+        with st.form(
+            "formulario_uso"
+        ):
 
-            col1, col2 = st.columns(2)
+            codigo = st.selectbox(
+                "Equipo",
+                lista_equipos
+            )
 
-
-            with col1:
-
-                codigo = st.selectbox(
-                    "Equipo",
-                    lista_equipos
-                )
-
-
-            with col2:
-
-                fecha = st.date_input(
-                    "Fecha",
-                    value=date.today()
-                )
-
+            fecha = st.date_input(
+                "Fecha",
+                value=date.today()
+            )
 
             tipo_registro = st.selectbox(
                 "Tipo de registro",
@@ -1145,15 +850,13 @@ elif pagina == "Registrar uso":
                 ]
             )
 
-
             observacion = st.text_area(
                 "Observación",
                 placeholder="Opcional..."
             )
 
-
             guardar = st.form_submit_button(
-                "Guardar registro"
+                "💾 Guardar registro"
             )
 
 
@@ -1172,24 +875,29 @@ elif pagina == "Registrar uso":
 
                 st.rerun()
 
+
+# ============================================================
 # ADMINISTRACIÓN
+# ============================================================
+
 elif pagina == "Administración":
 
-    st.markdown(
-        '<div class="section-title">⚙️ Administración</div>',
-        unsafe_allow_html=True
+    st.subheader(
+        "⚙️ Administración"
     )
 
-    st.warning(
-        "Sección destinada a la administración de información "
-        "de los equipos."
+    st.info(
+        "Esta sección permite agregar o actualizar "
+        "la información de los equipos."
     )
 
 
-    with st.form("formulario_equipo"):
+    with st.form(
+        "formulario_equipo"
+    ):
 
-        st.subheader(
-            "Agregar / actualizar equipo"
+        st.markdown(
+            "### Agregar / actualizar equipo"
         )
 
 
@@ -1203,12 +911,10 @@ elif pagina == "Administración":
                 placeholder="Ej. OPT-001"
             )
 
-
             tipo = st.text_input(
                 "Tipo",
                 value="HPLC"
             )
-
 
             estado = st.selectbox(
                 "Estado",
@@ -1229,16 +935,14 @@ elif pagina == "Administración":
                 placeholder="Ej. Laboratorio 1"
             )
 
-
             ultimo_mantenimiento = st.date_input(
                 "Último mantenimiento",
-                value=None
+                value=date.today()
             )
-
 
             proximo_mantenimiento = st.date_input(
                 "Próximo mantenimiento",
-                value=None
+                value=date.today()
             )
 
 
@@ -1248,7 +952,7 @@ elif pagina == "Administración":
 
 
         guardar_equipo = st.form_submit_button(
-            "Guardar equipo"
+            "💾 Guardar equipo"
         )
 
 
@@ -1283,12 +987,12 @@ elif pagina == "Administración":
                 st.rerun()
 
 
-# PIE DE PÁGINA
-st.markdown(
-    """
-    <div class="footer">
-        Dashboard de monitoreo de equipos 
-    </div>
-    """,
-    unsafe_allow_html=True
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.divider()
+
+st.caption(
+    "Dasboard de monitoreo de equipos"
 )
