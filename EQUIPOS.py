@@ -175,29 +175,36 @@ crear_tablas()
 # LEER EXCEL DE EQUIPOS
 # ============================================================
 
+############ ACA!!!!! ######
+#########
 @st.cache_data
 def cargar_listado_excel():
-
-    if not EXCEL_NAME.exists():
-
+    # 1. Creamos una ruta alternativa directa para el servidor de GitHub
+    RUTA_DIRECTA = "Listado equipos.xlsx"
+    
+    # 2. Verificamos cuál de las dos rutas está disponible físicamente
+    if EXCEL_NAME.exists():
+        archivo_a_leer = EXCEL_NAME
+    elif Path(RUTA_DIRECTA).exists():
+        archivo_a_leer = Path(RUTA_DIRECTA)
+    else:
+        # Si no encuentra ninguna de las dos, recién ahí se detiene
         return None
 
     try:
-
+        # 3. Leemos el archivo usando la ruta que resultó válida
         df = pd.read_excel(
-            EXCEL_NAME,
+            archivo_a_leer,
             sheet_name="Table 1"
         )
-
+        return df
+        
     except Exception as e:
-
-        st.error(
-            f"No se pudo leer el archivo "
-            f"'Listado equipos.xlsx'.\n\n"
-            f"Error: {e}"
-        )
-
+        st.error(f"No se pudo leer el archivo: {e}")
         return None
+
+##############################3
+#######!!!!!!#######
 
     # --------------------------------------------------------
     # Eliminar filas que no tengan código
