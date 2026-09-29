@@ -2,20 +2,32 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import date
+from pathlib import Path
 
 
+# ============================================================
 # CONFIGURACIÓN
+# ============================================================
+
 st.set_page_config(
-    page_title="Monitoreo de equipos",
+    page_title="AMEL",
     page_icon="🧪",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-DB_NAME = "equipment_dashboard.db"
+# Carpeta donde está EQUIPOS.py
+BASE_DIR = Path(__file__).resolve().parent
+
+DB_NAME = BASE_DIR / "equipment_dashboard.db"
+
+EXCEL_NAME = BASE_DIR / "Listado equipos.xlsx"
 
 
+# ============================================================
 # ESTILO VISUAL
+# ============================================================
+
 st.markdown("""
 <style>
 
@@ -73,12 +85,14 @@ h1, h2, h3 {
 # ============================================================
 
 def conectar_db():
+
     return sqlite3.connect(DB_NAME)
 
 
 def crear_tablas():
 
     conn = conectar_db()
+
     cursor = conn.cursor()
 
     # --------------------------------------------------------
@@ -98,7 +112,7 @@ def crear_tablas():
     """)
 
     # --------------------------------------------------------
-    # TABLA DE USOS
+    # TABLA DE REGISTROS
     # --------------------------------------------------------
 
     cursor.execute("""
@@ -111,7 +125,10 @@ def crear_tablas():
         )
     """)
 
-    # VERIFICAR COLUMNAS EXISTENTES
+    # --------------------------------------------------------
+    # REVISAR COLUMNAS
+    # --------------------------------------------------------
+
     cursor.execute(
         "PRAGMA table_info(equipos)"
     )
@@ -121,11 +138,17 @@ def crear_tablas():
         for fila in cursor.fetchall()
     ]
 
-    # NUEVAS COLUMNAS
     nuevas_columnas = [
+
         ("fecha_uso", "TEXT"),
-        ("fecha_mantenimiento_preventivo", "TEXT"),
+
+        (
+            "fecha_mantenimiento_preventivo",
+            "TEXT"
+        ),
+
         ("fecha_lavado", "TEXT"),
+
         ("fecha_ocurrencia", "TEXT")
     ]
 
@@ -141,12 +164,81 @@ def crear_tablas():
             )
 
     conn.commit()
+
     conn.close()
 
 
 crear_tablas()
 
+
+# ============================================================
+# LEER EXCEL DE EQUIPOS
+# ============================================================
+
+@st.cache_data
+def cargar_listado_excel():
+
+    if not EXCEL_NAME.exists():
+
+        return None
+
+    try:
+
+        df = pd.read_excel(
+            EXCEL_NAME,
+            sheet_name="Table 1"
+        )
+
+    except Exception as e:
+
+        st.error(
+            f"No se pudo leer el archivo "
+            f"'Listado equipos.xlsx'.\n\n"
+            f"Error: {e}"
+        )
+
+        return None
+
+    # --------------------------------------------------------
+    # Eliminar filas que no tengan código
+    # --------------------------------------------------------
+
+    if "CÓDIGO" in df.columns:
+
+        df = df[
+            df["CÓDIGO"].notna()
+        ].copy()
+
+    # --------------------------------------------------------
+    # Limpiar códigos
+    # --------------------------------------------------------
+
+    if "CÓDIGO" in df.columns:
+
+        df["CÓDIGO"] = (
+            df["CÓDIGO"]
+            .astype(str)
+            .str.strip()
+        )
+
+    # --------------------------------------------------------
+    # Eliminar filas completamente vacías
+    # --------------------------------------------------------
+
+    df = df.dropna(
+        how="all"
+    )
+
+    return df
+
+
+listado_excel = cargar_listado_excel()
+
+
+# ============================================================
 # FUNCIONES DE BASE DE DATOS
+# ============================================================
+
 def obtener_equipos():
 
     conn = conectar_db()
@@ -187,6 +279,7 @@ def guardar_equipo(
 ):
 
     conn = conectar_db()
+
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -203,32 +296,56 @@ def guardar_equipo(
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
+
         codigo,
+
         tipo,
+
         estado,
+
         fecha_uso,
+
         fecha_mantenimiento_preventivo,
+
         fecha_lavado,
+
         fecha_ocurrencia,
+
         observacion
     ))
 
     conn.commit()
+
     conn.close()
 
+
+# ============================================================
 # FUNCIONES DE USO
-def calcular_ultimo_uso(codigo, usos):
+# ============================================================
+
+def calcular_ultimo_uso(
+    codigo,
+    usos
+):
 
     if usos.empty:
+
         return None
 
     registros = usos[
-        (usos["codigo_equipo"] == codigo)
+        (
+            usos["codigo_equipo"]
+            == codigo
+        )
         &
-        (usos["tipo_registro"] == "Uso")
+        (
+            usos["tipo_registro"]
+            == "Uso"
+        )
     ]
 
     if registros.empty:
+
         return None
 
     fechas = pd.to_datetime(
@@ -237,12 +354,16 @@ def calcular_ultimo_uso(codigo, usos):
     )
 
     if fechas.dropna().empty:
+
         return None
 
     return fechas.max().date()
 
 
-def calcular_dias_sin_uso(codigo, usos):
+def calcular_dias_sin_uso(
+    codigo,
+    usos
+):
 
     ultimo_uso = calcular_ultimo_uso(
         codigo,
@@ -250,45 +371,68 @@ def calcular_dias_sin_uso(codigo, usos):
     )
 
     if ultimo_uso is None:
+
         return None
 
     return (
-        date.today() - ultimo_uso
+        date.today()
+        - ultimo_uso
     ).days
 
 
 def determinar_alerta(dias):
 
     if dias is None:
+
         return "⚪ Sin información"
 
     if dias <= 7:
+
         return "🟢 Uso reciente"
 
     if dias <= 14:
+
         return "🟡 Revisar"
 
     return "🔴 Sin uso prolongado"
 
+
+# ============================================================
 # ESTADOS
+# ============================================================
+
 ESTADOS = [
+
     "Operativo",
+
     "En uso",
+
     "De baja",
+
     "Lavado integral",
+
     "Mantenimiento preventivo",
+
     "Ocurrencias"
 ]
 
 
-def obtener_icono_estado(estado):
+def obtener_icono_estado(
+    estado
+):
 
     iconos = {
+
         "Operativo": "🟢",
+
         "En uso": "🔵",
+
         "De baja": "⚫",
+
         "Lavado integral": "🧼",
+
         "Mantenimiento preventivo": "🔧",
+
         "Ocurrencias": "⚠️"
     }
 
@@ -297,18 +441,35 @@ def obtener_icono_estado(estado):
         "⚪"
     )
 
-# FUNCIONES DE FECHAS
-def formatear_fecha(fecha):
+
+# ============================================================
+# FORMATEAR FECHAS
+# ============================================================
+
+def formatear_fecha(
+    fecha
+):
 
     if fecha is None:
+
         return "Sin registro"
 
-    if pd.isna(fecha):
-        return "Sin registro"
+    try:
 
-    texto = str(fecha).strip()
+        if pd.isna(fecha):
+
+            return "Sin registro"
+
+    except:
+
+        pass
+
+    texto = str(
+        fecha
+    ).strip()
 
     if texto == "":
+
         return "Sin registro"
 
     try:
@@ -323,50 +484,67 @@ def formatear_fecha(fecha):
 
         return texto
 
-# CARGAR DATOS
+
+# ============================================================
+# DATOS ACTUALES
+# ============================================================
+
 equipos = obtener_equipos()
+
 usos = obtener_usos()
 
+
+# ============================================================
 # SIDEBAR
+# ============================================================
+
 with st.sidebar:
 
-    st.markdown("# 🧪")
+    st.markdown(
+        "# 🧪"
+    )
 
     st.markdown(
         "## Monitoreo de equipos"
     )
 
-    st.caption(
-        "Uso y estado"
-    )
 
     st.divider()
 
     pagina = st.radio(
         "NAVEGACIÓN",
         [
+
             "Dashboard",
+
             "Equipos",
+
             "Administración",
-            "Información sobre mantenimentos",
+
+            "Mantenimentos",
+
             "Listado de equipos"
         ]
     )
 
-    st.divider()
-
+# ============================================================
 # TÍTULO GENERAL
+# ============================================================
+
 st.title(
-    "MONITOREO DE EQUIPOS DE LABORATORIO"
+    "AMEL"
 )
 
 st.caption(
-    "Monitoreo de estado, utilización y alertas de equipos"
+    "Abbott Monitoring & Equipment Log"
 )
 
 st.divider()
 
+
+# ============================================================
 # DASHBOARD
+# ============================================================
 
 if pagina == "Dashboard":
 
@@ -374,23 +552,30 @@ if pagina == "Dashboard":
         "📊 Resumen general"
     )
 
-    total = len(equipos)
+    total = len(
+        listado_excel
+    ) if listado_excel is not None else len(
+        equipos
+    )
 
     operativos = len(
         equipos[
-            equipos["estado"] == "Operativo"
+            equipos["estado"]
+            == "Operativo"
         ]
     )
 
     en_uso = len(
         equipos[
-            equipos["estado"] == "En uso"
+            equipos["estado"]
+            == "En uso"
         ]
     )
 
     baja = len(
         equipos[
-            equipos["estado"] == "De baja"
+            equipos["estado"]
+            == "De baja"
         ]
     )
 
@@ -403,7 +588,10 @@ if pagina == "Dashboard":
             usos
         )
 
-        if dias is not None and dias > 14:
+        if (
+            dias is not None
+            and dias > 14
+        ):
 
             sin_uso += 1
 
@@ -453,7 +641,7 @@ if pagina == "Dashboard":
 
     st.divider()
 
-    # ALERTAS
+
     st.subheader(
         "⚠️ Alertas"
     )
@@ -469,10 +657,16 @@ if pagina == "Dashboard":
             usos
         )
 
-        if dias is not None and dias > 14:
+        if (
+            dias is not None
+            and dias > 14
+        ):
 
             alertas.append(
-                (codigo, dias)
+                (
+                    codigo,
+                    dias
+                )
             )
 
 
@@ -493,102 +687,29 @@ if pagina == "Dashboard":
         )
 
 
-    st.divider()
-
-    # TABLA
-    st.subheader(
-        "🖥️ Estado de equipos"
-    )
-
-    if equipos.empty:
-
-        st.info(
-            "Todavía no hay equipos registrados."
-        )
-
-    else:
-
-        datos = []
-
-        for _, equipo in equipos.iterrows():
-
-            codigo = equipo["codigo"]
-
-            ultimo_uso = calcular_ultimo_uso(
-                codigo,
-                usos
-            )
-
-            dias = calcular_dias_sin_uso(
-                codigo,
-                usos
-            )
-
-            ultimo_mantenimiento = (
-                equipo.get(
-                    "ultimo_mantenimiento"
-                )
-            )
-
-            datos.append({
-
-                "Código": codigo,
-
-                "Tipo": equipo["tipo"],
-
-                "Estado": (
-                    f"{obtener_icono_estado(equipo['estado'])} "
-                    f"{equipo['estado']}"
-                ),
-
-                "Último uso": (
-                    formatear_fecha(
-                        ultimo_uso
-                    )
-                ),
-
-                "Días sin uso": (
-                    dias
-                    if dias is not None
-                    else "-"
-                ),
-
-                "Último mantenimiento": (
-                    formatear_fecha(
-                        ultimo_mantenimiento
-                    )
-                ),
-
-                "Alerta": (
-                    determinar_alerta(
-                        dias
-                    )
-                )
-            })
-
-
-        st.dataframe(
-            pd.DataFrame(datos),
-            use_container_width=True,
-            hide_index=True
-        )
-
+# ============================================================
 # EQUIPOS
+# ============================================================
+
 elif pagina == "Equipos":
 
     st.subheader(
         "🖥️ Equipos registrados"
     )
 
-
     if equipos.empty:
 
         st.info(
-            "No hay equipos registrados todavía."
+            "No hay equipos registrados "
+            "en el sistema todavía."
         )
 
     else:
+
+        # ----------------------------------------------------
         # FILTROS
+        # ----------------------------------------------------
+
         col1, col2, col3 = st.columns(3)
 
 
@@ -671,7 +792,7 @@ elif pagina == "Equipos":
 
         st.divider()
 
-        # TARJETAS
+
         if filtrados.empty:
 
             st.warning(
@@ -702,14 +823,18 @@ elif pagina == "Equipos":
 
                     estado = equipo["estado"]
 
-                    ultimo_uso = calcular_ultimo_uso(
-                        codigo,
-                        usos
+                    ultimo_uso = (
+                        calcular_ultimo_uso(
+                            codigo,
+                            usos
+                        )
                     )
 
-                    dias = calcular_dias_sin_uso(
-                        codigo,
-                        usos
+                    dias = (
+                        calcular_dias_sin_uso(
+                            codigo,
+                            usos
+                        )
                     )
 
                     ultimo_mantenimiento = (
@@ -766,7 +891,11 @@ elif pagina == "Equipos":
                                 f"{formatear_fecha(ultimo_mantenimiento)}"
                             )
 
+
+# ============================================================
 # ADMINISTRACIÓN
+# ============================================================
+
 elif pagina == "Administración":
 
     st.subheader(
@@ -777,7 +906,11 @@ elif pagina == "Administración":
         "Registra o actualiza la información del equipo."
     )
 
+
+    # --------------------------------------------------------
     # DATOS DEL EQUIPO
+    # --------------------------------------------------------
+
     st.markdown(
         "### Datos del equipo"
     )
@@ -801,7 +934,11 @@ elif pagina == "Administración":
             value="HPLC"
         )
 
+
+    # --------------------------------------------------------
     # ESTADO
+    # --------------------------------------------------------
+
     st.markdown(
         "### Estado del equipo"
     )
@@ -812,7 +949,10 @@ elif pagina == "Administración":
         ESTADOS
     )
 
+
+    # --------------------------------------------------------
     # FECHAS DINÁMICAS
+    # --------------------------------------------------------
 
     fecha_uso = None
 
@@ -822,7 +962,7 @@ elif pagina == "Administración":
 
     fecha_ocurrencia = None
 
-    # EN USO
+
     if estado == "En uso":
 
         fecha_uso = st.date_input(
@@ -832,7 +972,7 @@ elif pagina == "Administración":
             key="fecha_uso_admin"
         )
 
-    # LAVADO INTEGRAL
+
     elif estado == "Lavado integral":
 
         fecha_lavado = st.date_input(
@@ -842,7 +982,7 @@ elif pagina == "Administración":
             key="fecha_lavado_admin"
         )
 
-    # MANTENIMIENTO PREVENTIVO
+
     elif estado == "Mantenimiento preventivo":
 
         fecha_mantenimiento_preventivo = st.date_input(
@@ -852,7 +992,7 @@ elif pagina == "Administración":
             key="fecha_mantenimiento_admin"
         )
 
-    # OCURRENCIAS
+
     elif estado == "Ocurrencias":
 
         fecha_ocurrencia = st.date_input(
@@ -862,7 +1002,11 @@ elif pagina == "Administración":
             key="fecha_ocurrencia_admin"
         )
 
-    # OBSERVACIONES
+
+    # --------------------------------------------------------
+    # OBSERVACIÓN
+    # --------------------------------------------------------
+
     st.markdown(
         "### Observaciones"
     )
@@ -874,7 +1018,10 @@ elif pagina == "Administración":
     )
 
 
+    # --------------------------------------------------------
     # GUARDAR
+    # --------------------------------------------------------
+
     if st.button(
         "💾 Guardar información",
         type="primary"
@@ -934,7 +1081,11 @@ elif pagina == "Administración":
 
             st.rerun()
 
-# INFORMACIÓN SOBRE MANTENIMENTOS
+
+# ============================================================
+# INFORMACIÓN SOBRE MANTENIMIENTOS
+# ============================================================
+
 elif pagina == "Información sobre mantenimentos":
 
     st.subheader(
@@ -942,17 +1093,647 @@ elif pagina == "Información sobre mantenimentos":
     )
 
     st.info(
-        "Después."
+        "Esta sección será desarrollada posteriormente."
     )
 
+
+# ============================================================
 # LISTADO DE EQUIPOS
+# ============================================================
+
 elif pagina == "Listado de equipos":
 
     st.subheader(
         "📋 Listado de equipos"
     )
 
-    st.info(
-        "Después."
+    # --------------------------------------------------------
+    # COMPROBAR EXCEL
+    # --------------------------------------------------------
+
+    if listado_excel is None:
+
+        st.error(
+            "No se encontró el archivo "
+            "'Listado equipos.xlsx'."
+        )
+
+        st.info(
+            "Coloca 'Listado equipos.xlsx' "
+            "en la misma carpeta donde está "
+            "EQUIPOS.py."
+        )
+
+        st.stop()
+
+
+    # --------------------------------------------------------
+    # RESUMEN
+    # --------------------------------------------------------
+
+    total_excel = len(
+        listado_excel
     )
+
+
+    st.info(
+        f"📁 Inventario maestro: "
+        f"{total_excel} equipos registrados "
+        f"en el archivo de equipos."
+    )
+
+
+    # --------------------------------------------------------
+    # PREPARAR LISTADO
+    # --------------------------------------------------------
+
+    listado = listado_excel.copy()
+
+
+    # --------------------------------------------------------
+    # AGREGAR INFORMACIÓN DEL SISTEMA
+    # --------------------------------------------------------
+
+    if "CÓDIGO" in listado.columns:
+
+        listado["CÓDIGO"] = (
+            listado["CÓDIGO"]
+            .astype(str)
+            .str.strip()
+        )
+
+
+    if not equipos.empty:
+
+        estados_db = equipos[
+            [
+                "codigo",
+                "estado",
+                "ultimo_mantenimiento"
+            ]
+        ].copy()
+
+
+        estados_db = estados_db.rename(
+            columns={
+                "codigo": "CÓDIGO",
+                "estado": "ESTADO ACTUAL",
+                "ultimo_mantenimiento":
+                    "ÚLTIMO MANTENIMIENTO"
+            }
+        )
+
+
+        listado = listado.merge(
+            estados_db,
+            on="CÓDIGO",
+            how="left"
+        )
+
+    else:
+
+        listado["ESTADO ACTUAL"] = (
+            "No registrado"
+        )
+
+        listado["ÚLTIMO MANTENIMIENTO"] = (
+            None
+        )
+
+
+    # --------------------------------------------------------
+    # ÚLTIMO USO
+    # --------------------------------------------------------
+
+    ultimos_usos = []
+
+
+    for codigo in listado["CÓDIGO"]:
+
+        ultimo = calcular_ultimo_uso(
+            codigo,
+            usos
+        )
+
+        ultimos_usos.append(
+            formatear_fecha(
+                ultimo
+            )
+        )
+
+
+    listado["ÚLTIMO USO"] = (
+        ultimos_usos
+    )
+
+
+    # --------------------------------------------------------
+    # DÍAS SIN USO
+    # --------------------------------------------------------
+
+    dias_sin_uso = []
+
+
+    for codigo in listado["CÓDIGO"]:
+
+        dias = calcular_dias_sin_uso(
+            codigo,
+            usos
+        )
+
+        if dias is None:
+
+            dias_sin_uso.append(
+                "-"
+            )
+
+        else:
+
+            dias_sin_uso.append(
+                dias
+            )
+
+
+    listado["DÍAS SIN USO"] = (
+        dias_sin_uso
+    )
+
+
+    # --------------------------------------------------------
+    # ORDENAR COLUMNAS
+    # --------------------------------------------------------
+
+    columnas_sistema = [
+
+        "ESTADO ACTUAL",
+
+        "ÚLTIMO USO",
+
+        "DÍAS SIN USO",
+
+        "ÚLTIMO MANTENIMIENTO"
+    ]
+
+
+    columnas_originales = [
+        columna
+        for columna in listado_excel.columns
+        if columna in listado.columns
+    ]
+
+
+    columnas_finales = (
+        columnas_originales
+        +
+        [
+            columna
+            for columna in columnas_sistema
+            if columna in listado.columns
+        ]
+    )
+
+
+    listado = listado[
+        columnas_finales
+    ]
+
+
+    # --------------------------------------------------------
+    # FILTROS
+    # --------------------------------------------------------
+
+    st.markdown(
+        "### 🔎 Buscar y filtrar"
+    )
+
+
+    col1, col2, col3 = st.columns(3)
+
+
+    with col1:
+
+        busqueda_codigo = st.text_input(
+            "Buscar por código",
+            placeholder="Ej. OPT-023"
+        )
+
+
+    with col2:
+
+        if "MARCA" in listado.columns:
+
+            marcas = [
+
+                "Todas"
+            ] + sorted(
+                listado["MARCA"]
+                .dropna()
+                .astype(str)
+                .unique()
+                .tolist()
+            )
+
+            filtro_marca = st.selectbox(
+                "Marca",
+                marcas
+            )
+
+        else:
+
+            filtro_marca = "Todas"
+
+
+    with col3:
+
+        if "DESCRIPCIÓN" in listado.columns:
+
+            descripciones = [
+
+                "Todos"
+            ] + sorted(
+                listado["DESCRIPCIÓN"]
+                .dropna()
+                .astype(str)
+                .unique()
+                .tolist()
+            )
+
+            filtro_tipo_equipo = st.selectbox(
+                "Descripción",
+                descripciones
+            )
+
+        else:
+
+            filtro_tipo_equipo = "Todos"
+
+
+    listado_filtrado = (
+        listado.copy()
+    )
+
+
+    # --------------------------------------------------------
+    # FILTRO CÓDIGO
+    # --------------------------------------------------------
+
+    if busqueda_codigo:
+
+        listado_filtrado = (
+            listado_filtrado[
+                listado_filtrado["CÓDIGO"]
+                .str.contains(
+                    busqueda_codigo,
+                    case=False,
+                    na=False
+                )
+            ]
+        )
+
+
+    # --------------------------------------------------------
+    # FILTRO MARCA
+    # --------------------------------------------------------
+
+    if (
+        filtro_marca != "Todas"
+        and "MARCA" in listado_filtrado.columns
+    ):
+
+        listado_filtrado = (
+            listado_filtrado[
+                listado_filtrado["MARCA"]
+                .astype(str)
+                == filtro_marca
+            ]
+        )
+
+
+    # --------------------------------------------------------
+    # FILTRO DESCRIPCIÓN
+    # --------------------------------------------------------
+
+    if (
+        filtro_tipo_equipo != "Todos"
+        and "DESCRIPCIÓN"
+        in listado_filtrado.columns
+    ):
+
+        listado_filtrado = (
+            listado_filtrado[
+                listado_filtrado[
+                    "DESCRIPCIÓN"
+                ].astype(str)
+                == filtro_tipo_equipo
+            ]
+        )
+
+
+    # --------------------------------------------------------
+    # RESULTADOS
+    # --------------------------------------------------------
+
+    st.markdown(
+        f"**{len(listado_filtrado)} "
+        f"equipos encontrados**"
+    )
+
+
+    # --------------------------------------------------------
+    # TABLA COMPLETA
+    # --------------------------------------------------------
+
+    st.dataframe(
+        listado_filtrado,
+        use_container_width=True,
+        hide_index=True,
+        height=550
+    )
+
+
+    st.divider()
+
+
+    # ========================================================
+    # FICHA INDIVIDUAL
+    # ========================================================
+
+    st.markdown(
+        "### 🔍 Ficha del equipo"
+    )
+
+
+    if len(listado_filtrado) > 0:
+
+        codigos_disponibles = (
+            listado_filtrado[
+                "CÓDIGO"
+            ]
+            .astype(str)
+            .tolist()
+        )
+
+
+        codigo_seleccionado = st.selectbox(
+            "Selecciona un equipo",
+            codigos_disponibles
+        )
+
+
+        equipo_seleccionado = (
+            listado_filtrado[
+                listado_filtrado["CÓDIGO"]
+                == codigo_seleccionado
+            ]
+            .iloc[0]
+        )
+
+
+        st.markdown(
+            f"## 🧪 {codigo_seleccionado}"
+        )
+
+
+        # ----------------------------------------------------
+        # INFORMACIÓN PRINCIPAL
+        # ----------------------------------------------------
+
+        col1, col2, col3 = st.columns(3)
+
+
+        with col1:
+
+            if "DESCRIPCIÓN" in equipo_seleccionado.index:
+
+                st.write(
+                    "**Descripción**"
+                )
+
+                st.write(
+                    equipo_seleccionado[
+                        "DESCRIPCIÓN"
+                    ]
+                )
+
+
+            if "MARCA" in equipo_seleccionado.index:
+
+                st.write(
+                    "**Marca**"
+                )
+
+                st.write(
+                    equipo_seleccionado[
+                        "MARCA"
+                    ]
+                )
+
+
+        with col2:
+
+            if "MODELO/MÓDULOS" in equipo_seleccionado.index:
+
+                st.write(
+                    "**Modelo / módulos**"
+                )
+
+                st.write(
+                    equipo_seleccionado[
+                        "MODELO/MÓDULOS"
+                    ]
+                )
+
+
+            if "SERIE/SERIE MÓDULOS/LOTE" in equipo_seleccionado.index:
+
+                st.write(
+                    "**Serie / serie módulos / lote**"
+                )
+
+                st.write(
+                    equipo_seleccionado[
+                        "SERIE/SERIE MÓDULOS/LOTE"
+                    ]
+                )
+
+
+        with col3:
+
+            if "EQUIPO MÓVIL" in equipo_seleccionado.index:
+
+                st.write(
+                    "**Equipo móvil**"
+                )
+
+                st.write(
+                    equipo_seleccionado[
+                        "EQUIPO MÓVIL"
+                    ]
+                )
+
+
+            if "CATEGORIZACIÓN DE EQUIPO" in equipo_seleccionado.index:
+
+                st.write(
+                    "**Categorización**"
+                )
+
+                st.write(
+                    equipo_seleccionado[
+                        "CATEGORIZACIÓN DE EQUIPO"
+                    ]
+                )
+
+
+        st.divider()
+
+
+        # ----------------------------------------------------
+        # ESTADO DEL SISTEMA
+        # ----------------------------------------------------
+
+        st.markdown(
+            "### 📊 Información del sistema"
+        )
+
+
+        col1, col2, col3, col4 = st.columns(4)
+
+
+        estado_actual = equipo_seleccionado.get(
+            "ESTADO ACTUAL"
+        )
+
+
+        if pd.isna(
+            estado_actual
+        ):
+
+            estado_actual = (
+                "No registrado"
+            )
+
+
+        with col1:
+
+            st.metric(
+                "Estado actual",
+                estado_actual
+            )
+
+
+        with col2:
+
+            st.metric(
+                "Último uso",
+                equipo_seleccionado.get(
+                    "ÚLTIMO USO",
+                    "Sin registro"
+                )
+            )
+
+
+        with col3:
+
+            st.metric(
+                "Días sin uso",
+                equipo_seleccionado.get(
+                    "DÍAS SIN USO",
+                    "-"
+                )
+            )
+
+
+        with col4:
+
+            ultimo_mantenimiento = (
+                equipo_seleccionado.get(
+                    "ÚLTIMO MANTENIMIENTO",
+                    "Sin registro"
+                )
+            )
+
+
+            if pd.isna(
+                ultimo_mantenimiento
+            ):
+
+                ultimo_mantenimiento = (
+                    "Sin registro"
+                )
+
+
+            st.metric(
+                "Último mantenimiento",
+                formatear_fecha(
+                    ultimo_mantenimiento
+                )
+            )
+
+
+        st.divider()
+
+
+        # ----------------------------------------------------
+        # TODA LA INFORMACIÓN DEL EXCEL
+        # ----------------------------------------------------
+
+        st.markdown(
+            "### 📋 Información completa del equipo"
+        )
+
+
+        datos_detalle = []
+
+        for columna in columnas_originales:
+
+            valor = (
+                equipo_seleccionado[
+                    columna
+                ]
+            )
+
+
+            if pd.isna(valor):
+
+                valor = "Sin registro"
+
+
+            elif isinstance(
+                valor,
+                pd.Timestamp
+            ):
+
+                valor = valor.strftime(
+                    "%d/%m/%Y"
+                )
+
+
+            datos_detalle.append({
+
+                "Campo": columna,
+
+                "Información": str(
+                    valor
+                )
+            })
+
+
+        st.dataframe(
+            pd.DataFrame(
+                datos_detalle
+            ),
+            use_container_width=True,
+            hide_index=True,
+            height=500
+        )
+
+
+    else:
+
+        st.warning(
+            "No hay equipos que coincidan "
+            "con los filtros seleccionados."
+        )
+
 
