@@ -4,12 +4,9 @@ import sqlite3
 from datetime import date
 
 
-# ============================================================
 # CONFIGURACIÓN
-# ============================================================
-
 st.set_page_config(
-    page_title="Equipment Monitoring Dashboard",
+    page_title="Monitoreo de equipos",
     page_icon="🧪",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -18,74 +15,54 @@ st.set_page_config(
 DB_NAME = "equipment_dashboard.db"
 
 
-# ============================================================
 # ESTILO VISUAL
-# ============================================================
-
 st.markdown("""
 <style>
 
-    /* Fondo general */
-    .stApp {
-        background-color: #F4F7FA;
-    }
+.stApp {
+    background-color: #F4F7FA;
+}
 
-    /* Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #003B5C;
-    }
+[data-testid="stSidebar"] {
+    background-color: #003B5C;
+}
 
-    [data-testid="stSidebar"] * {
-        color: white !important;
-    }
+[data-testid="stSidebar"] * {
+    color: white !important;
+}
 
-    /* Títulos */
-    h1, h2, h3 {
-        color: #003B5C !important;
-    }
+h1, h2, h3 {
+    color: #003B5C !important;
+}
 
-    /* Métricas */
-    [data-testid="stMetric"] {
-        background-color: white;
-        border: 1px solid #DCE5EC;
-        border-radius: 12px;
-        padding: 15px;
-        box-shadow: 0px 2px 8px rgba(0, 59, 92, 0.07);
-    }
+[data-testid="stMetric"] {
+    background-color: white;
+    border: 1px solid #DCE5EC;
+    border-radius: 12px;
+    padding: 15px;
+    box-shadow: 0px 2px 8px rgba(0, 59, 92, 0.07);
+}
 
-    [data-testid="stMetricLabel"] {
-        color: #64748B !important;
-    }
+[data-testid="stMetricLabel"] {
+    color: #64748B !important;
+}
 
-    [data-testid="stMetricValue"] {
-        color: #003B5C !important;
-    }
+[data-testid="stMetricValue"] {
+    color: #003B5C !important;
+}
 
-    /* Botones */
-    .stButton > button {
-        background-color: #0072CE;
-        color: white;
-        border: none;
-        border-radius: 7px;
-        font-weight: 600;
-    }
+.stButton > button {
+    background-color: #0072CE;
+    color: white;
+    border: none;
+    border-radius: 7px;
+    font-weight: 600;
+}
 
-    .stButton > button:hover {
-        background-color: #005B9F;
-        color: white;
-    }
-
-    /* Contenedores */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: white;
-        border-radius: 12px;
-        border: 1px solid #DCE5EC;
-    }
-
-    /* Dataframe */
-    [data-testid="stDataFrame"] {
-        border-radius: 10px;
-    }
+.stButton > button:hover {
+    background-color: #005B9F;
+    color: white;
+}
 
 </style>
 """, unsafe_allow_html=True)
@@ -104,6 +81,10 @@ def crear_tablas():
     conn = conectar_db()
     cursor = conn.cursor()
 
+    # --------------------------------------------------------
+    # TABLA DE EQUIPOS
+    # --------------------------------------------------------
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS equipos (
             codigo TEXT PRIMARY KEY,
@@ -116,6 +97,10 @@ def crear_tablas():
         )
     """)
 
+    # --------------------------------------------------------
+    # TABLA DE USOS
+    # --------------------------------------------------------
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -126,17 +111,42 @@ def crear_tablas():
         )
     """)
 
+    # VERIFICAR COLUMNAS EXISTENTES
+    cursor.execute(
+        "PRAGMA table_info(equipos)"
+    )
+
+    columnas_existentes = [
+        fila[1]
+        for fila in cursor.fetchall()
+    ]
+
+    # NUEVAS COLUMNAS
+    nuevas_columnas = [
+        ("fecha_uso", "TEXT"),
+        ("fecha_mantenimiento_preventivo", "TEXT"),
+        ("fecha_lavado", "TEXT"),
+        ("fecha_ocurrencia", "TEXT")
+    ]
+
+    for nombre_columna, tipo in nuevas_columnas:
+
+        if nombre_columna not in columnas_existentes:
+
+            cursor.execute(
+                f"""
+                ALTER TABLE equipos
+                ADD COLUMN {nombre_columna} {tipo}
+                """
+            )
+
     conn.commit()
     conn.close()
 
 
 crear_tablas()
 
-
-# ============================================================
-# FUNCIONES BASE DE DATOS
-# ============================================================
-
+# FUNCIONES DE BASE DE DATOS
 def obtener_equipos():
 
     conn = conectar_db()
@@ -165,73 +175,52 @@ def obtener_usos():
     return df
 
 
-def registrar_uso(
-    codigo,
-    fecha,
-    tipo_registro,
-    observacion
-):
-
-    conn = conectar_db()
-
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        INSERT INTO usos
-        (
-            codigo_equipo,
-            fecha,
-            tipo_registro,
-            observacion
-        )
-        VALUES (?, ?, ?, ?)
-    """, (
-        codigo,
-        str(fecha),
-        tipo_registro,
-        observacion
-    ))
-
-    conn.commit()
-    conn.close()
-
-
-def agregar_equipo(
+def guardar_equipo(
     codigo,
     tipo,
     estado,
-    ubicacion,
-    ultimo_mantenimiento,
-    proximo_mantenimiento,
+    fecha_uso,
+    fecha_mantenimiento_preventivo,
+    fecha_lavado,
+    fecha_ocurrencia,
     observacion
 ):
 
     conn = conectar_db()
-
     cursor = conn.cursor()
 
     cursor.execute("""
         INSERT OR REPLACE INTO equipos
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (
+            codigo,
+            tipo,
+            estado,
+            fecha_uso,
+            fecha_mantenimiento_preventivo,
+            fecha_lavado,
+            fecha_ocurrencia,
+            observacion
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         codigo,
         tipo,
         estado,
-        ubicacion,
-        ultimo_mantenimiento,
-        proximo_mantenimiento,
+        fecha_uso,
+        fecha_mantenimiento_preventivo,
+        fecha_lavado,
+        fecha_ocurrencia,
         observacion
     ))
 
     conn.commit()
     conn.close()
 
-
-# ============================================================
-# FUNCIONES DE CÁLCULO
-# ============================================================
-
+# FUNCIONES DE USO
 def calcular_ultimo_uso(codigo, usos):
+
+    if usos.empty:
+        return None
 
     registros = usos[
         (usos["codigo_equipo"] == codigo)
@@ -281,51 +270,74 @@ def determinar_alerta(dias):
 
     return "🔴 Sin uso prolongado"
 
+# ESTADOS
+ESTADOS = [
+    "Operativo",
+    "En uso",
+    "De baja",
+    "Lavado integral",
+    "Mantenimiento preventivo",
+    "Ocurrencias"
+]
+
 
 def obtener_icono_estado(estado):
 
-    if estado == "Operativo":
-        return "🟢"
+    iconos = {
+        "Operativo": "🟢",
+        "En uso": "🔵",
+        "De baja": "⚫",
+        "Lavado integral": "🧼",
+        "Mantenimiento preventivo": "🔧",
+        "Ocurrencias": "⚠️"
+    }
 
-    if estado == "En uso":
-        return "🔵"
+    return iconos.get(
+        estado,
+        "⚪"
+    )
 
-    if estado == "En mantenimiento":
-        return "🟡"
+# FUNCIONES DE FECHAS
+def formatear_fecha(fecha):
 
-    if estado == "Fuera de servicio":
-        return "🔴"
+    if fecha is None:
+        return "Sin registro"
 
-    if estado == "De baja":
-        return "⚫"
+    if pd.isna(fecha):
+        return "Sin registro"
 
-    return "⚪"
+    texto = str(fecha).strip()
 
+    if texto == "":
+        return "Sin registro"
 
-# ============================================================
-# CARGAR INFORMACIÓN
-# ============================================================
+    try:
 
+        return pd.to_datetime(
+            texto
+        ).strftime(
+            "%d/%m/%Y"
+        )
+
+    except:
+
+        return texto
+
+# CARGAR DATOS
 equipos = obtener_equipos()
 usos = obtener_usos()
 
-
-# ============================================================
 # SIDEBAR
-# ============================================================
-
 with st.sidebar:
 
-    st.markdown(
-        "# 🧪"
-    )
+    st.markdown("# 🧪")
 
     st.markdown(
-        "## MONITOREO DIGITAL DE EQUIPOS"
+        "## Monitoreo de equipos"
     )
 
     st.caption(
-        "Equipment management"
+        "Uso y estado"
     )
 
     st.divider()
@@ -335,24 +347,17 @@ with st.sidebar:
         [
             "Dashboard",
             "Equipos",
-            "Registrar uso",
-            "Administración"
+            "Administración",
+            "Información sobre mantenimentos",
+            "Listado de equipos"
         ]
     )
 
     st.divider()
 
-    st.caption(
-        "Prototype v0.2"
-    )
-
-
-# ============================================================
-# ENCABEZADO
-# ============================================================
-
+# TÍTULO GENERAL
 st.title(
-    "Monitoreo de equipos"
+    "MONITOREO DE EQUIPOS DE LABORATORIO"
 )
 
 st.caption(
@@ -361,20 +366,13 @@ st.caption(
 
 st.divider()
 
-
-# ============================================================
 # DASHBOARD
-# ============================================================
 
 if pagina == "Dashboard":
 
     st.subheader(
         "📊 Resumen general"
     )
-
-    # --------------------------------------------------------
-    # KPIs
-    # --------------------------------------------------------
 
     total = len(equipos)
 
@@ -406,48 +404,56 @@ if pagina == "Dashboard":
         )
 
         if dias is not None and dias > 14:
+
             sin_uso += 1
 
 
     col1, col2, col3, col4, col5 = st.columns(5)
 
+
     with col1:
+
         st.metric(
             "TOTAL EQUIPOS",
             total
         )
 
+
     with col2:
+
         st.metric(
             "OPERATIVOS",
             operativos
         )
 
+
     with col3:
+
         st.metric(
             "EN USO",
             en_uso
         )
 
+
     with col4:
+
         st.metric(
             "SIN USO",
             sin_uso
         )
 
+
     with col5:
+
         st.metric(
             "DE BAJA",
             baja
         )
 
 
-    # --------------------------------------------------------
-    # ALERTAS
-    # --------------------------------------------------------
-
     st.divider()
 
+    # ALERTAS
     st.subheader(
         "⚠️ Alertas"
     )
@@ -466,10 +472,7 @@ if pagina == "Dashboard":
         if dias is not None and dias > 14:
 
             alertas.append(
-                (
-                    codigo,
-                    dias
-                )
+                (codigo, dias)
             )
 
 
@@ -490,12 +493,9 @@ if pagina == "Dashboard":
         )
 
 
-    # --------------------------------------------------------
-    # TABLA
-    # --------------------------------------------------------
-
     st.divider()
 
+    # TABLA
     st.subheader(
         "🖥️ Estado de equipos"
     )
@@ -508,7 +508,7 @@ if pagina == "Dashboard":
 
     else:
 
-        datos_dashboard = []
+        datos = []
 
         for _, equipo in equipos.iterrows():
 
@@ -524,20 +524,13 @@ if pagina == "Dashboard":
                 usos
             )
 
-            if ultimo_uso:
-
-                ultimo_uso_texto = (
-                    ultimo_uso.strftime(
-                        "%d/%m/%Y"
-                    )
+            ultimo_mantenimiento = (
+                equipo.get(
+                    "ultimo_mantenimiento"
                 )
+            )
 
-            else:
-
-                ultimo_uso_texto = "Sin registro"
-
-
-            datos_dashboard.append({
+            datos.append({
 
                 "Código": codigo,
 
@@ -548,13 +541,11 @@ if pagina == "Dashboard":
                     f"{equipo['estado']}"
                 ),
 
-                "Ubicación": (
-                    equipo["ubicacion"]
-                    if equipo["ubicacion"]
-                    else "-"
+                "Último uso": (
+                    formatear_fecha(
+                        ultimo_uso
+                    )
                 ),
-
-                "Último uso": ultimo_uso_texto,
 
                 "Días sin uso": (
                     dias
@@ -562,33 +553,33 @@ if pagina == "Dashboard":
                     else "-"
                 ),
 
-                "Alerta": determinar_alerta(
-                    dias
-                )
+                "Último mantenimiento": (
+                    formatear_fecha(
+                        ultimo_mantenimiento
+                    )
+                ),
 
+                "Alerta": (
+                    determinar_alerta(
+                        dias
+                    )
+                )
             })
 
 
-        df_dashboard = pd.DataFrame(
-            datos_dashboard
-        )
-
         st.dataframe(
-            df_dashboard,
+            pd.DataFrame(datos),
             use_container_width=True,
             hide_index=True
         )
 
-
-# ============================================================
 # EQUIPOS
-# ============================================================
-
 elif pagina == "Equipos":
 
     st.subheader(
         "🖥️ Equipos registrados"
     )
+
 
     if equipos.empty:
 
@@ -597,16 +588,13 @@ elif pagina == "Equipos":
         )
 
     else:
-
-        # ----------------------------------------------------
         # FILTROS
-        # ----------------------------------------------------
-
         col1, col2, col3 = st.columns(3)
+
 
         with col1:
 
-            estados = (
+            estados_filtro = (
                 ["Todos"]
                 +
                 sorted(
@@ -619,7 +607,7 @@ elif pagina == "Equipos":
 
             filtro_estado = st.selectbox(
                 "Estado",
-                estados
+                estados_filtro
             )
 
 
@@ -683,11 +671,7 @@ elif pagina == "Equipos":
 
         st.divider()
 
-
-        # ----------------------------------------------------
         # TARJETAS
-        # ----------------------------------------------------
-
         if filtrados.empty:
 
             st.warning(
@@ -718,34 +702,21 @@ elif pagina == "Equipos":
 
                     estado = equipo["estado"]
 
-                    ultimo_uso = (
-                        calcular_ultimo_uso(
-                            codigo,
-                            usos
-                        )
+                    ultimo_uso = calcular_ultimo_uso(
+                        codigo,
+                        usos
                     )
 
-                    dias = (
-                        calcular_dias_sin_uso(
-                            codigo,
-                            usos
-                        )
+                    dias = calcular_dias_sin_uso(
+                        codigo,
+                        usos
                     )
 
-
-                    if ultimo_uso:
-
-                        ultimo_uso_texto = (
-                            ultimo_uso.strftime(
-                                "%d/%m/%Y"
-                            )
+                    ultimo_mantenimiento = (
+                        equipo.get(
+                            "ultimo_mantenimiento"
                         )
-
-                    else:
-
-                        ultimo_uso_texto = (
-                            "Sin registro"
-                        )
+                    )
 
 
                     with columna:
@@ -755,7 +726,9 @@ elif pagina == "Equipos":
                         ):
 
                             st.markdown(
-                                f"### {obtener_icono_estado(estado)} {codigo}"
+                                f"### "
+                                f"{obtener_icono_estado(estado)} "
+                                f"{codigo}"
                             )
 
                             st.caption(
@@ -763,13 +736,15 @@ elif pagina == "Equipos":
                             )
 
                             st.write(
-                                f"**Estado:** {estado}"
+                                f"**Estado:** "
+                                f"{estado}"
                             )
 
                             st.write(
                                 f"**Último uso:** "
-                                f"{ultimo_uso_texto}"
+                                f"{formatear_fecha(ultimo_uso)}"
                             )
+
 
                             if dias is not None:
 
@@ -785,101 +760,13 @@ elif pagina == "Equipos":
                                     "Sin registro"
                                 )
 
-                            ubicacion = (
-                                equipo["ubicacion"]
-                                if equipo["ubicacion"]
-                                else "No registrada"
-                            )
 
                             st.write(
-                                f"**Ubicación:** "
-                                f"{ubicacion}"
+                                f"**Último mantenimiento:** "
+                                f"{formatear_fecha(ultimo_mantenimiento)}"
                             )
 
-
-# ============================================================
-# REGISTRAR USO
-# ============================================================
-
-elif pagina == "Registrar uso":
-
-    st.subheader(
-        "📝 Registrar uso"
-    )
-
-    st.info(
-        "El registro digital complementa el "
-        "registro físico del cuadernillo."
-    )
-
-
-    if equipos.empty:
-
-        st.warning(
-            "Primero debes registrar los equipos."
-        )
-
-    else:
-
-        lista_equipos = (
-            equipos["codigo"].tolist()
-        )
-
-
-        with st.form(
-            "formulario_uso"
-        ):
-
-            codigo = st.selectbox(
-                "Equipo",
-                lista_equipos
-            )
-
-            fecha = st.date_input(
-                "Fecha",
-                value=date.today()
-            )
-
-            tipo_registro = st.selectbox(
-                "Tipo de registro",
-                [
-                    "Uso",
-                    "Mantenimiento",
-                    "Fuera de servicio",
-                    "Otro"
-                ]
-            )
-
-            observacion = st.text_area(
-                "Observación",
-                placeholder="Opcional..."
-            )
-
-            guardar = st.form_submit_button(
-                "💾 Guardar registro"
-            )
-
-
-            if guardar:
-
-                registrar_uso(
-                    codigo,
-                    fecha,
-                    tipo_registro,
-                    observacion
-                )
-
-                st.success(
-                    f"✓ Registro guardado para {codigo}"
-                )
-
-                st.rerun()
-
-
-# ============================================================
 # ADMINISTRACIÓN
-# ============================================================
-
 elif pagina == "Administración":
 
     st.subheader(
@@ -887,112 +774,185 @@ elif pagina == "Administración":
     )
 
     st.info(
-        "Esta sección permite agregar o actualizar "
-        "la información de los equipos."
+        "Registra o actualiza la información del equipo."
+    )
+
+    # DATOS DEL EQUIPO
+    st.markdown(
+        "### Datos del equipo"
     )
 
 
-    with st.form(
-        "formulario_equipo"
+    col1, col2 = st.columns(2)
+
+
+    with col1:
+
+        codigo = st.text_input(
+            "Código del equipo",
+            placeholder="Ej. OPT-001"
+        )
+
+
+    with col2:
+
+        tipo = st.text_input(
+            "Tipo",
+            value="HPLC"
+        )
+
+    # ESTADO
+    st.markdown(
+        "### Estado del equipo"
+    )
+
+
+    estado = st.selectbox(
+        "Selecciona el estado",
+        ESTADOS
+    )
+
+    # FECHAS DINÁMICAS
+
+    fecha_uso = None
+
+    fecha_mantenimiento_preventivo = None
+
+    fecha_lavado = None
+
+    fecha_ocurrencia = None
+
+    # EN USO
+    if estado == "En uso":
+
+        fecha_uso = st.date_input(
+            "📅 Fecha de uso",
+            value=date.today(),
+            format="DD/MM/YYYY",
+            key="fecha_uso_admin"
+        )
+
+    # LAVADO INTEGRAL
+    elif estado == "Lavado integral":
+
+        fecha_lavado = st.date_input(
+            "📅 Fecha de lavado",
+            value=date.today(),
+            format="DD/MM/YYYY",
+            key="fecha_lavado_admin"
+        )
+
+    # MANTENIMIENTO PREVENTIVO
+    elif estado == "Mantenimiento preventivo":
+
+        fecha_mantenimiento_preventivo = st.date_input(
+            "📅 Fecha de mantenimiento preventivo",
+            value=date.today(),
+            format="DD/MM/YYYY",
+            key="fecha_mantenimiento_admin"
+        )
+
+    # OCURRENCIAS
+    elif estado == "Ocurrencias":
+
+        fecha_ocurrencia = st.date_input(
+            "📅 Fecha de ocurrencia",
+            value=date.today(),
+            format="DD/MM/YYYY",
+            key="fecha_ocurrencia_admin"
+        )
+
+    # OBSERVACIONES
+    st.markdown(
+        "### Observaciones"
+    )
+
+
+    observacion = st.text_area(
+        "Observación",
+        placeholder="Agregar información adicional..."
+    )
+
+
+    # GUARDAR
+    if st.button(
+        "💾 Guardar información",
+        type="primary"
     ):
 
-        st.markdown(
-            "### Agregar / actualizar equipo"
-        )
+        if not codigo.strip():
 
-
-        col1, col2 = st.columns(2)
-
-
-        with col1:
-
-            codigo = st.text_input(
-                "Código del equipo",
-                placeholder="Ej. OPT-001"
+            st.error(
+                "Debes ingresar el código del equipo."
             )
 
-            tipo = st.text_input(
-                "Tipo",
-                value="HPLC"
-            )
+        else:
 
-            estado = st.selectbox(
-                "Estado",
-                [
-                    "Operativo",
-                    "En uso",
-                    "En mantenimiento",
-                    "Fuera de servicio",
-                    "De baja"
-                ]
-            )
+            guardar_equipo(
 
+                codigo.strip(),
 
-        with col2:
+                tipo.strip(),
 
-            ubicacion = st.text_input(
-                "Ubicación",
-                placeholder="Ej. Laboratorio 1"
-            )
+                estado,
 
-            ultimo_mantenimiento = st.date_input(
-                "Último mantenimiento",
-                value=date.today()
-            )
+                (
+                    str(fecha_uso)
+                    if fecha_uso
+                    else None
+                ),
 
-            proximo_mantenimiento = st.date_input(
-                "Próximo mantenimiento",
-                value=date.today()
-            )
-
-
-        observacion = st.text_area(
-            "Observación"
-        )
-
-
-        guardar_equipo = st.form_submit_button(
-            "💾 Guardar equipo"
-        )
-
-
-        if guardar_equipo:
-
-            if not codigo:
-
-                st.error(
-                    "Debes ingresar el código del equipo."
-                )
-
-            else:
-
-                agregar_equipo(
-                    codigo,
-                    tipo,
-                    estado,
-                    ubicacion,
+                (
                     str(
-                        ultimo_mantenimiento
-                    ),
-                    str(
-                        proximo_mantenimiento
-                    ),
-                    observacion
-                )
+                        fecha_mantenimiento_preventivo
+                    )
+                    if fecha_mantenimiento_preventivo
+                    else None
+                ),
 
-                st.success(
-                    f"✓ Equipo {codigo} guardado correctamente."
-                )
+                (
+                    str(fecha_lavado)
+                    if fecha_lavado
+                    else None
+                ),
 
-                st.rerun()
+                (
+                    str(fecha_ocurrencia)
+                    if fecha_ocurrencia
+                    else None
+                ),
+
+                observacion
+            )
 
 
-# ============================================================
-# FOOTER
-# ============================================================
+            st.success(
+                f"✓ Información de {codigo} "
+                "guardada correctamente."
+            )
 
-st.divider()
 
-st.caption(
-    "Dasboard de monitoreo de equipos"
-)
+            st.rerun()
+
+# INFORMACIÓN SOBRE MANTENIMENTOS
+elif pagina == "Información sobre mantenimentos":
+
+    st.subheader(
+        "🔧 Información sobre mantenimentos"
+    )
+
+    st.info(
+        "Después."
+    )
+
+# LISTADO DE EQUIPOS
+elif pagina == "Listado de equipos":
+
+    st.subheader(
+        "📋 Listado de equipos"
+    )
+
+    st.info(
+        "Después."
+    )
+
