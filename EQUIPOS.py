@@ -1042,7 +1042,7 @@ def estado_lavado_hplc(
 
         return (
 
-            "⚪ Sin lavado registrado: ",
+            "⚪ Sin lavado registrado",
 
             "gris"
 
